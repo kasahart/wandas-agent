@@ -1,0 +1,31 @@
+## Plan: ノートブックで wandas 信号解析を自律実行
+
+いまの拡張は「wandas を Python で introspection してスキーマをチャットに渡す」まではできていますが、`wandas_runPython` の tool call を実際に実行せず“シミュレーション表示”で止まっています。そこで、VS Code ノートブック上の同一カーネルで「専用セルを1つ作って都度上書き実行」し、セル出力（数値/要約テキスト＋プロット画像）を tool 結果として LLM に戻し、最大回数まで自動で反復できるようにします。
+
+**Steps**
+1. 有効化を安定化するため、`package.json` に `activationEvents` を追加（少なくとも `onCommand:wandas.showVersion` と `onCommand:wandas.createPythonFile`、可能なら Chat Participant 用のイベントも追加）。
+2. `src/extension.ts` の `handleGeneralChat()` を「tool call を検出→実行→結果を LLM に返して続行」するループ構造に変更（最大反復回数・キャンセル尊重・例外時のユーザー向けエラー整形を含む）。
+3. ノートブック実行ユーティリティを新設（例: `src/notebookRunner.ts` を追加）し、以下を実装する方針で固める。
+   - アクティブな Notebook を取得（`vscode.window.activeNotebookEditor`）
+   - “wandas agent 専用セル”を検索（セル metadata か固定ラベルで判別）し、無ければ末尾に作成
+   - セル本文を LLM が生成した Python に置換（上書き）
+   - セルを実行（Notebook の標準コマンド or Notebook API を利用。実装時に 1.109 の安定 API/コマンドIDに合わせる）
+   - 実行完了を待ち、セル出力から `text/plain` と `image/png` を抽出して tool 結果に整形
+4. tool を `wandas_runPython` から「ノートブックで走らせる」意味に合わせて改名・再定義（例: `wandas_runNotebookCell`）。入力は最小で `code: string` のみ（UXを増やさない）。
+5. 反復自動ループ（ユーザー要望）を安全に制御するため、以下のガードを入れる（UI追加はしない、内部制限のみ）。
+   - 最大反復回数（例: 3〜6）とセル実行タイムアウト
+   - 出力が巨大な場合は要約して返す（その旨はチャットに明記）
+6. README を実態に合わせて最小更新（ノートブック前提の使い方、専用セル上書き動作、入力は「Python変数を使う」前提、出力はテキスト＋画像がセルに出る、など）。
+
+**Verification**
+- ビルド: `npm run compile`
+- テスト: `npm test`（既存の雛形テストが通ることを維持）
+- 手動確認（VS Code）:
+  - `.ipynb` を開いて Python カーネル起動
+  - 先に `x = ...` など解析対象変数を作る
+  - Copilot Chat で `@wandas` に「変数 x を〜解析して。必要なら複数回試行して」等を依頼
+  - 専用セルが1つだけ更新され続け、セル出力に要約テキストとプロットが残ることを確認
+
+**Decisions**
+- 専用セルを1つ作って都度上書き実行（ノートが増殖しない）
+- プロットは「ノートブック出力に表示できればOK」（ファイル保存は必須にしない）

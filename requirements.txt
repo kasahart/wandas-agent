@@ -1,0 +1,2 @@
+waveform-analysis @ git+https://github.com/endolith/waveform-analysis.git@baece1e4db3fa2324090086efe1d74cce314e65b
+wandas==0.1.11

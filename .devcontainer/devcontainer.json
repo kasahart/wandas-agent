@@ -1,0 +1,21 @@
+{
+  "name": "Node.js & TypeScript",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:latest",
+  "features": {
+    "ghcr.io/devcontainers/features/python:1": {},
+    "ghcr.io/devcontainers-extra/features/mypy:2": {}
+  },
+  "remoteEnv": {
+    "VIRTUAL_ENV": "${containerWorkspaceFolder}/.venv",
+    "PATH": "${containerWorkspaceFolder}/.venv/bin:${containerEnv:PATH}"
+  },
+  "postCreateCommand": "python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt && npm install -g yo generator-code",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "christian-kohler.npm-intellisense",
+        "ms-vscode.extension-test-runner"
+      ]
+    }
+  }
+}
