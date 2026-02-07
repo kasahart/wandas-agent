@@ -1,2 +1,69 @@
-Wandas Core API Reference基本的な入出力、前処理、可視化に関するAPI仕様です。1. Import通常、以下のようにエイリアス wd を使用してインポートします。import wandas as wd
-2. Input / Output (IO)read_wav(path: str) -> ChannelFrameWAVファイルを読み込みます。path: ファイルパス。read_csv(path: str, time_column: str = None, sr: int = None) -> ChannelFrameCSVファイルを読み込みます。path: ファイルパス。time_column: 時間情報が含まれる列名（例: "Time"）。指定すると自動でサンプリングレートを推定します。sr: サンプリングレートを明示的に指定する場合に使用。generate_sin(freqs: list, duration: float, sampling_rate: int) -> ChannelFrameテスト用の正弦波を生成します。3. Signal Processing (Filtering & Resampling)これらのメソッドは ChannelFrame に対して呼び出し可能で、新しい ChannelFrame を返します（メソッドチェイン可能）。.low_pass_filter(cutoff: float, order: int = 4)ローパスフィルタを適用します。cutoff: カットオフ周波数 (Hz)。.high_pass_filter(cutoff: float, order: int = 4)ハイパスフィルタを適用します。cutoff: カットオフ周波数 (Hz)。.band_pass_filter(low: float, high: float, order: int = 4)バンドパスフィルタを適用します。.resample(target_rate: int)リサンプリングを行います。.normalize()振幅を正規化します（-1.0 〜 1.0）。4. Visualization & Inspection.plot(title: str = None, **kwargs)現在のフレーム（時間波形、スペクトル、スペクトログラム）を描画します。MatplotlibのAxesオブジェクトを返します。ノートブック環境では自動的にグラフが表示されます。.describe()信号の統計情報（平均、RMS、Max/Minなど）とメタデータをテキストで表示します。データの概要を把握する際に最初に使用します。
+---
+# Wandas — Core API Reference
+
+主要な入出力、前処理、解析、可視化メソッドの概要と簡単な使用例を示します。詳細なパラメータは `references/analysis.md` の該当セクションを参照してください。
+
+## 1. Import
+
+```python
+import wandas as wd
+```
+
+## 2. Input / Output (I/O)
+
+- `read_wav(path: str) -> ChannelFrame`
+  - WAV ファイルを読み込みます。
+
+- `read_csv(path: str, time_column: str = None, sr: int = None) -> ChannelFrame`
+  - CSV を読み込みます。`time_column` 指定で時刻列を用いてサンプリングレートを推定できます。`sr` で明示的に指定可能。
+
+- `generate_sin(freqs: list, duration: float, sampling_rate: int) -> ChannelFrame`
+  - テスト用の正弦波を生成します。
+
+## 3. Signal Processing (Filtering & Resampling)
+
+これらは `ChannelFrame` に対して呼び出せます。すべてメソッドチェイン可能です。
+
+- `low_pass_filter(cutoff: float, order: int = 4)`
+- `high_pass_filter(cutoff: float, order: int = 4)`
+- `band_pass_filter(low: float, high: float, order: int = 4)`
+- `resample(target_rate: int)`
+- `normalize()`
+
+例:
+
+```python
+sig = wd.read_wav('input.wav')
+sig_filtered = sig.high_pass_filter(20).normalize()
+```
+
+## 4. Analysis (FFT / STFT)
+
+- `fft(n_fft: int = None, window: str = 'hann') -> SpectralFrame`
+- `psd(n_fft: int = None, window: str = 'hann') -> SpectralFrame`
+- `stft(n_fft: int = 2048, hop_length: int = 512, window: str = 'hann') -> SpectrogramFrame`
+
+（パラメータの詳細は `references/analysis.md` を参照）
+
+## 5. Visualization & Inspection
+
+- `plot(title: str = None, **kwargs)` — フレームの可視化。Matplotlib の `Axes` を返します。
+- `describe()` — 統計情報（平均、RMS、最大/最小など）とメタデータを表示します。
+
+## 6. Notes & Best Practices
+
+- メソッドは非破壊的に新しいフレームを返すため、比較が容易です（例: フィルタ前後を別変数で保持）。
+- 大きなデータを扱う場合はリサンプリングや `n_fft`/`hop_length` の調整で計算量を制御してください。
+
+- 演算子の順序について: `ChannelFrame` は `frame * scalar` や `frame + other_frame` のように左オペランドがフレームになるケースをサポートします。`scalar * frame` のようにスカラーを左に置くと Python 側でスカラーの乗算が優先され `TypeError` になることがあるため、スケーリングは `frame * 0.5` のようにフレーム側を左にしてください。
+
+ 例:
+
+```python
+sig_main = wd.generate_sin([1000.0], duration=2.0, sampling_rate=10000)
+sig_noise = wd.generate_sin([50.0], duration=2.0, sampling_rate=10000)
+# 正しい: ChannelFrame * scalar
+sig = sig_main + (sig_noise * 0.5)
+# 間違い（TypeError を起こす可能性あり）
+# sig = sig_main + 0.5 * sig_noise
+```

@@ -55,22 +55,10 @@ def main():
         # エージェントがコンテキストとして理解すべきメタデータを出力
         # wandasのFrameオブジェクトが持つ属性を表示
         print(f"Object Type: {type(sig).__name__}")
-
-        if hasattr(sig, 'sampling_rate') and sig.sampling_rate:
-            print(f"Sampling Rate: {sig.sampling_rate} Hz")
-
-        if hasattr(sig, 'duration'):
-            print(f"Duration     : {sig.duration:.4f} sec")
-
-        if hasattr(sig, 'channels'):
-            print(f"Channels     : {sig.channels}")
-
-        if hasattr(sig, 'shape'):
-            print(f"Data Shape   : {sig.shape}")
-
+        sig.info()
         print("-" * 30)
         print(
-            "Suggestion: Use .plot() to visualize or .describe() for statistical details.")
+            "Suggestion: Use .describe() for visualization and listening, .plot() for simple visualization, or .info() for statistical details.")
 
     except Exception as e:
         print(f"Error loading file: {e}")
