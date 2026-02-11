@@ -1,21 +1,21 @@
 # wandas-agent
 
-Wandas（Python）の信号解析を、Copilot Chat から自律的に実行するための VS Code 拡張です。
+Copilot Chat で信号解析を行うためのAgent スキルです。
 
-## 使い方（ノートブック実行）
+## 使い方
 
-1. `.ipynb` を開いて Python カーネルを起動します。
-2. 解析対象の変数（例: `x` や `signal`）をノートブック側で用意します。
-3. Copilot Chat で `@wandas` に解析を依頼します。
+1. `wandas` ライブラリをインストールします。
 
-この拡張は、アクティブなノートブックに **専用セルを1つ** 作成し、そこを都度上書きして Python を実行します（同じカーネルなので既存変数にアクセスできます）。
+   ```bash
+   pip install wandas
+   ```
+2. エージェントにタスクを指示します。例えば：
+    - 「wandasを使って `data.wav` を読み込んで、20Hz以上の成分をハイパスフィルタで除去し、正規化してプロットしてください。」
+    - 「wandasを使って `sensor.csv` を読み込んで、FFT解析を行い、スペクトルを表示してください。」
 
 ## 出力
 
-- 数値/要約テキスト: チャットとセル出力を使い分けます（モデルが実行結果を見て反復します）。
-- プロット: ノートブックのセル出力として表示されます。
+- エージェントは `wandas` のメソッドチェーンを用いて信号処理パイプラインを構築し、解析結果をプロットします。
 
-## 開発メモ
-
-- `requirements.txt` に `wandas` が含まれます（devcontainer では `.venv` を用意）。
-- コマンド: `wandas.showVersion`, `wandas.createPythonFile`
+## 参考資料
+- プロンプトと解析結果のサンプル　`notebooks/test.ipynb`
