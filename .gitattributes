@@ -2,5 +2,5 @@
 *.{cmd,[cC][mM][dD]} text eol=crlf
 *.{bat,[bB][aA][tT]} text eol=crlf
 
-# Treat Jupyter notebooks as documentation so Linguist won't count them as source
 *.ipynb linguist-documentation=true
+*.sh linguist-documentation=true
