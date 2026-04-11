@@ -9,10 +9,15 @@
     "VIRTUAL_ENV": "${containerWorkspaceFolder}/.venv",
     "PATH": "${containerWorkspaceFolder}/.venv/bin:${containerEnv:PATH}"
   },
-  "postCreateCommand": "python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt",
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
   "customizations": {
     "vscode": {
-      "extensions": []
+      "extensions": [
+        "Anthropic.claude-code"
+      ]
     }
-  }
+  },
+  "runArgs": [
+    "--add-host=host.docker.internal:host-gateway"
+  ]
 }
