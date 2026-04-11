@@ -64,7 +64,7 @@ print(f"SPL: {np.mean(spl.data):.1f} dB(A)")  # ~80 dB(A)
 import wandas as wd
 
 # 単一周波数のサイン波
-tone = wd.generate_sin(freqs=440, sampling_rate=44100, duration=1.0)
+tone = wd.generate_sin(freqs=440.0, sampling_rate=44100, duration=1.0)
 
 # 複数周波数（チャンネルごと）
 multi = wd.generate_sin(freqs=[440, 880, 1760], sampling_rate=44100, duration=1.0)

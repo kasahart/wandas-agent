@@ -20,7 +20,7 @@ wandas は音声・振動信号解析のための Python ライブラリ。panda
 | `wd.read_wav` | `(filename, labels=None, normalize=False)` | ChannelFrame | `normalize=False` は生 PCM 値。`normalize=True` で [-1, 1] に正規化 |
 | `wd.read_csv` | `(filename, time_column=0, labels=None, delimiter=",", header=0)` | ChannelFrame | `time_column` は列インデックス(int)または列名(str) |
 | `wd.from_numpy` | `(data, sampling_rate, label=None, metadata=None, ch_labels=None, ch_units=None)` | ChannelFrame | shape: `(channels, samples)` または 1-D（自動変換）。`ch_refs` パラメータは存在しない |
-| `wd.generate_sin` | `(freqs=1000, sampling_rate=16000, duration=1.0, label=None)` | ChannelFrame | `freqs` をリストにすると多チャンネル |
+| `wd.generate_sin` | `(freqs=1000.0, sampling_rate=16000, duration=1.0, label=None)` | ChannelFrame | `freqs` をリストにすると多チャンネル |
 | `wd.from_folder` | `(folder_path, sampling_rate=None, file_extensions=None, recursive=False, lazy_loading=True)` | ChannelFrameDataset | 遅延バッチ読み込み |
 
 ## フレーム型一覧
@@ -89,7 +89,7 @@ spl = frame.sound_level("A", "Fast", dB=True)
 ### テスト信号を生成する
 ```python
 # 単一周波数
-tone = wd.generate_sin(freqs=440, sampling_rate=44100, duration=1.0)
+tone = wd.generate_sin(freqs=440.0, sampling_rate=44100, duration=1.0)
 
 # 多チャンネル（複数周波数）
 multi = wd.generate_sin(freqs=[440, 880], sampling_rate=44100, duration=1.0)
