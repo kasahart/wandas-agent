@@ -1,0 +1,44 @@
+name: Skill API Tests
+
+on:
+  push:
+    paths:
+      - ".claude/skills/**"
+      - "tests/skills/**"
+      - "wandas/**"
+  pull_request:
+    paths:
+      - ".claude/skills/**"
+      - "tests/skills/**"
+      - "wandas/**"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install wandas
+        run: pip install ./wandas
+
+      - name: Install pytest
+        run: pip install pytest
+
+      - name: Run API execution tests
+        run: pytest tests/skills/test_api_execution.py -v
+
+      - name: Run SKILL.md structure tests
+        run: pytest tests/skills/test_skill_structure.py -v
+
+      - name: Run API signature tests
+        run: pytest tests/skills/test_api_signatures.py -v
