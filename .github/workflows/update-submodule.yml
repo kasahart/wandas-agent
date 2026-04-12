@@ -16,8 +16,25 @@ jobs:
           submodules: true
           token: ${{ secrets.SUBMODULE_UPDATE_TOKEN }}
 
-      - name: Update wandas submodule to latest main
-        run: git submodule update --remote wandas
+      - name: Resolve target tag
+        id: tag
+        run: |
+          cd wandas
+          git fetch --tags
+          PAYLOAD_TAG="${{ github.event.client_payload.tag }}"
+          if [ -n "${PAYLOAD_TAG}" ]; then
+            TARGET="${PAYLOAD_TAG}"
+          else
+            # スケジュール・手動実行時は最新リリースタグを使う
+            TARGET=$(git tag --list 'v*.*.*' --sort=-version:refname | head -1)
+          fi
+          echo "tag=${TARGET}" >> $GITHUB_OUTPUT
+          echo "Resolved tag: ${TARGET}"
+
+      - name: Checkout release tag in submodule
+        run: |
+          cd wandas
+          git checkout "${{ steps.tag.outputs.tag }}"
 
       - name: Commit if changed
         run: |
@@ -25,8 +42,5 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add wandas
           git diff --cached --quiet && echo "No changes" && exit 0
-          TAG="${{ github.event.client_payload.tag }}"
-          HASH=$(git -C wandas rev-parse --short HEAD)
-          MSG="${TAG:+chore: update wandas submodule to ${TAG}}${TAG:-chore: update wandas submodule to ${HASH}}"
-          git commit -m "${MSG}"
+          git commit -m "chore: update wandas submodule to ${{ steps.tag.outputs.tag }}"
           git push

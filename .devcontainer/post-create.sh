@@ -2,7 +2,7 @@
 set -euo pipefail
 
 python3 -m venv .venv
-./.venv/bin/pip install -e ./wandas[dev]
+./.venv/bin/pip install -e ./wandas[dev] pytest-cov
 curl -fsSL https://claude.ai/install.sh | bash
 
 if [ -f /workspaces/wandas-agent/.claude/settings.json ]; then
