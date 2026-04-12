@@ -1,0 +1,30 @@
+name: Update wandas submodule
+
+on:
+  repository_dispatch:
+    types: [wandas-updated]
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * *"  # 毎日 UTC 0:00（フォールバック）
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          token: ${{ secrets.SUBMODULE_UPDATE_TOKEN }}
+
+      - name: Update wandas submodule to latest main
+        run: git submodule update --remote wandas
+
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add wandas
+          git diff --cached --quiet && echo "No changes" && exit 0
+          HASH=$(git -C wandas rev-parse --short HEAD)
+          git commit -m "chore: update wandas submodule to ${HASH}"
+          git push
