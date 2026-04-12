@@ -10,3 +10,4 @@ notebook/
 docs/superpowers/
 *.pyc
 __pycache__/
+.coverage
