@@ -8,3 +8,5 @@ node_modules
 notebook/
 .claude/settings.local.json
 docs/superpowers/
+*.pyc
+__pycache__/
