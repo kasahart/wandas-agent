@@ -1,5 +1,8 @@
 name: Update wandas submodule
 
+permissions:
+  contents: write
+
 on:
   repository_dispatch:
     types: [wandas-updated]
@@ -14,7 +17,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
-          token: ${{ secrets.SUBMODULE_UPDATE_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Resolve target tag
         id: tag
