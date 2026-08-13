@@ -1,167 +1,142 @@
-# wandas Visualization API Reference
+# Wandas 0.7.2 Visualization API Reference
 
-ソース: `wandas/wandas/frames/channel.py`, `frames/spectral.py`, `frames/spectrogram.py`, `frames/noct.py`, `frames/roughness.py`
+ソース: `wandas/wandas/frames/channel.py`, `spectral.py`, `spectrogram.py`, `noct.py`, `roughness.py`, `cepstral.py`, `cepstrogram.py`, `pairwise.py`
 
-## ChannelFrame.plot
+## Contents
+
+1. Channel and spectral plots
+2. Cepstral plots
+3. Pairwise plots
+4. Return and compute behavior
+
+## Channel and spectral plots
 
 ```python
-.plot(
-    plot_type: str = "waveform",
-    ax=None,
-    title: str | None = None,
-    overlay: bool = False,
-    xlabel: str | None = None,
-    ylabel: str | None = None,
-    alpha: float = 1.0,
-    xlim=None,
-    ylim=None,
-    **kwargs
-) -> Axes
+ChannelFrame.plot(
+    plot_type="waveform", ax=None, title=None, overlay=False,
+    xlabel=None, ylabel=None, alpha=1.0, xlim=None, ylim=None, **kwargs,
+) -> Axes | Iterator[Axes]
+
+ChannelFrame.rms_plot(
+    ax=None, title=None, overlay=True, Aw=False, **kwargs,
+) -> Axes | Iterator[Axes]
 ```
 
-## ChannelFrame.rms_plot
-
 ```python
-.rms_plot(
-    ax=None,
-    title: str | None = None,
-    overlay: bool = True,
-    Aw: bool = False,
-    **kwargs
-) -> Axes
-```
-
-## ChannelFrame.describe
-
-```python
-.describe(
-    normalize: bool = True,
-    is_close: bool = True,
+ChannelFrame.describe(
+    normalize=True,
+    is_close=True,
     *,
-    fmin: float = 0,
-    fmax: float | None = None,
-    cmap: str = "jet",
-    vmin: float | None = None,
-    vmax: float | None = None,
+    fmin=0,
+    fmax=None,
+    cmap="jet",
+    vmin=None,
+    vmax=None,
     xlim=None,
     ylim=None,
-    Aw: bool = False,
-    waveform: dict | None = None,
-    spectral: dict | None = None,
-    image_save: str | None = None,
-    **kwargs
+    Aw=False,
+    waveform=None,
+    spectral=None,
+    image_save=None,
+    **kwargs,
 ) -> list[Figure] | None
 ```
-3パネル（波形・Welch スペクトル・STFT スペクトログラム）を生成。Jupyter では IPython.display.Audio によるオーディオ再生も追加。
 
-## SpectralFrame.plot
+`normalize` は playback display 用。summary の Welch は peak-amplitude spectrum で PSD ではない。
 
 ```python
-.plot(
-    plot_type: str = "frequency",
-    ax=None,
-    title: str | None = None,
-    overlay: bool = False,
-    xlabel: str | None = None,
-    ylabel: str | None = None,
-    alpha: float = 1.0,
-    xlim=None,
-    ylim=None,
-    Aw: bool = False,
-    **kwargs
+SpectralFrame.plot(
+    plot_type="frequency", ax=None, title=None, overlay=False,
+    xlabel=None, ylabel=None, alpha=1.0, xlim=None, ylim=None,
+    Aw=False, **kwargs,
+) -> Axes | Iterator[Axes]
+
+SpectrogramFrame.plot(
+    plot_type="spectrogram", ax=None, title=None, cmap="jet",
+    vmin=None, vmax=None, fmin=0, fmax=None, xlim=None, ylim=None,
+    Aw=False, overlay=False, **kwargs,
+) -> Axes | Iterator[Axes]
+
+SpectrogramFrame.plot_Aw(
+    plot_type="spectrogram", ax=None, **kwargs,
+) -> Axes | Iterator[Axes]
+```
+
+```python
+NOctFrame.plot(
+    plot_type="noct", ax=None, title=None, overlay=False,
+    xlabel=None, ylabel=None, alpha=1.0, xlim=None, ylim=None,
+    Aw=False, **kwargs,
+) -> Axes | Iterator[Axes]
+
+RoughnessFrame.plot(
+    plot_type="heatmap", ax=None, title=None, cmap="viridis",
+    vmin=None, vmax=None, xlabel="Time [s]",
+    ylabel="Frequency [Bark]",
+    colorbar_label="Specific Roughness [Asper/Bark]", **kwargs,
 ) -> Axes
 ```
 
-## SpectralFrame.plot_matrix
+## Cepstral plots
 
 ```python
-.plot_matrix(plot_type: str = "matrix", **kwargs) -> Axes
-```
-
-## SpectrogramFrame.plot
-
-```python
-.plot(
-    plot_type: str = "spectrogram",
+CepstralFrame.plot(
+    plot_type="quefrency",
     ax=None,
-    title: str | None = None,
-    cmap: str = "jet",
-    vmin: float | None = None,
-    vmax: float | None = None,
-    fmin: float = 0,
-    fmax: float | None = None,
-    xlim=None,
-    ylim=None,
-    Aw: bool = False,
-    overlay: bool = False,
-    **kwargs
-) -> Axes
+    *,
+    title=None,
+    xlabel="Quefrency [s]",
+    ylabel="Real cepstrum",
+    **line_kwargs,
+) -> Axes | Iterator[Axes]
 ```
 
-## SpectrogramFrame.plot_Aw
+`qmin` / `qmax` 引数はない。返された Axes へ `set_xlim()` を使う。
 
 ```python
-.plot_Aw(plot_type: str = "spectrogram", ax=None, **kwargs) -> Axes
-```
-`plot(Aw=True)` のショートカット。
-
-## NOctFrame.plot
-
-```python
-.plot(
-    plot_type: str = "noct",
+CepstrogramFrame.plot(
+    plot_type="cepstrogram",
     ax=None,
-    title: str | None = None,
-    overlay: bool = False,
-    xlabel: str | None = None,
-    ylabel: str | None = None,
-    alpha: float = 1.0,
-    xlim=None,
-    ylim=None,
-    Aw: bool = False,
-    **kwargs
-) -> Axes
+    *,
+    title=None,
+    xlabel="Time [s]",
+    ylabel="Quefrency [s]",
+    cmap="RdBu_r",
+    qmin=0.0,
+    qmax=None,
+    vmin=None,
+    vmax=None,
+    **kwargs,
+) -> Axes | Iterator[Axes]
 ```
-⚠️ `NOctFrame` に対するバイナリ演算（`+`, `-` 等）は `NotImplementedError` になる。
 
-## RoughnessFrame.plot
+Multi-channel `CepstrogramFrame` へ explicit `ax` は渡せない。channel を選ぶか、`ax=None` で個別 panel を作る。
+
+## Pairwise plots
 
 ```python
-.plot(
-    plot_type: str = "heatmap",
-    ax=None,
-    title: str | None = None,
-    cmap: str = "viridis",           # デフォルトは "viridis"（"jet" ではない）
-    vmin: float | None = None,
-    vmax: float | None = None,
-    xlabel: str = "Time [s]",
-    ylabel: str = "Frequency [Bark]",
-    colorbar_label: str = "Specific Roughness [Asper/Bark]",
-    **kwargs
-) -> Axes
+PairwiseSpectralFrame.plot(
+    plot_type="frequency", ax=None, title=None, overlay=False,
+    xlabel=None, ylabel=None, alpha=1.0, xlim=None, ylim=None,
+    Aw=False, view=None, **kwargs,
+) -> Axes | Iterator[Axes]
+
+PairwiseSpectralFrame.plot_matrix(
+    plot_type="matrix", *, view=None, **kwargs,
+) -> Axes | Iterator[Axes]
 ```
 
----
+| Concrete Frame | Valid view values |
+|---|---|
+| `CoherenceFrame` | `None`, `"coherence"`, `"raw"` |
+| `CrossSpectralFrame` | `None`, `"magnitude"`, `"phase"`, `"level"` |
+| `TransferFunctionFrame` | `None`, `"gain"`, `"phase"`, `"gain_db"`, `"transfer_level_db"` |
 
-## ax= パターン（オーバーレイ）
+全 pairwise Frame で `Aw=True` を拒否する。
 
-```python
-import matplotlib.pyplot as plt
+## Return and compute behavior
 
-# パターン1: overlay=True で同フレームの全チャンネルを重ねる
-ax = frame.fft().plot(overlay=True)
-
-# パターン2: ax= で別フレームを同 Axes に追加
-ax = frame_a.fft().plot(overlay=True, label="A")
-frame_b.fft().plot(ax=ax, overlay=True, label="B")
-plt.legend()
-plt.show()
-```
-
-## Jupyter vs スクリプト
-
-| 環境 | .plot() の挙動 |
-|------|--------------|
-| Jupyter Notebook | インライン表示 |
-| Python スクリプト | `plt.show()` が必要 |
-| describe() Jupyter | オーディオ再生ウィジェット付き |
+- plot/describe は requested values を materialize する compute boundary。
+- single-channel/selected-pair は通常 `Axes`。multi-channel/pair は `Iterator[Axes]` の場合がある。
+- script で display event loop が必要なら `matplotlib.pyplot.show()` は使えるが、data drawing 自体は Frame plot method に任せる。
+- overlay は同一 Axes へ描く操作。別 Frame の比較では `ax=` を明示する。
