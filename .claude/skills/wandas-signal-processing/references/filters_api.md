@@ -1,119 +1,124 @@
-# wandas Signal Processing API Reference
+# Wandas 0.7.2 Signal Processing API Reference
 
-ソース: `wandas/wandas/frames/mixins/channel_processing_mixin.py`
+ソース: `wandas/wandas/frames/mixins/channel_processing_mixin.py`, `wandas/wandas/processing/temporal.py`, `wandas/wandas/core/metadata.py`
 
-## フィルタメソッド
+## Contents
 
-全フィルタは Butterworth 設計（`scipy.signal.butter`）＋ `filtfilt` による零位相フィルタリング。
+1. Filters and shaping
+2. Channel and time operations
+3. Level operations
+4. Calibration rules
 
-### high_pass_filter
+## Filters and shaping
+
 ```python
 .high_pass_filter(cutoff: float, order: int = 4) -> ChannelFrame
-```
-- `cutoff`: カットオフ周波数 (Hz)。`sampling_rate / 2` 未満であること
-- `order`: フィルタ次数（デフォルト 4）
-
-### low_pass_filter
-```python
 .low_pass_filter(cutoff: float, order: int = 4) -> ChannelFrame
-```
-
-### band_pass_filter
-```python
-.band_pass_filter(low_cutoff: float, high_cutoff: float, order: int = 4) -> ChannelFrame
-```
-- 引数名は `low_cutoff` / `high_cutoff`（`low` / `high` ではない）
-
-### a_weighting
-```python
+.band_pass_filter(
+    low_cutoff: float,
+    high_cutoff: float,
+    order: int = 4,
+) -> ChannelFrame
 .a_weighting() -> ChannelFrame
 ```
-IEC 61672-1 に基づく A 重み付けフィルタ。ChannelFrame にのみ適用可能（SpectralFrame 不可）。
 
-## 正規化・整形
+カットオフは正で Nyquist 未満、band pass は `low_cutoff < high_cutoff`。
 
-### normalize
 ```python
 .normalize(
     norm: float | None = float("inf"),
     axis: int | None = -1,
     threshold: float | None = None,
-    fill: bool | None = None
+    fill: bool | None = None,
 ) -> ChannelFrame
 ```
-- `norm=float("inf")`: ピーク正規化（デフォルト）
-- `norm=2`: L2 ノルム（RMS 正規化相当）
 
-### remove_dc
+- `norm=inf` は peak/vector infinity norm の正規化。
+- `norm=2` は L2 vector norm の正規化で、RMS=1 の保証ではない。
+- 校正値を保つ level 解析の前には使わない。
+
 ```python
 .remove_dc() -> ChannelFrame
-```
-DC オフセット（直流成分）を除去。
-
-### resampling
-```python
+.trim(start: float = 0, end: float | None = None) -> ChannelFrame
+.fix_length(length: int | None = None, duration: float | None = None) -> ChannelFrame
+.fade(fade_ms: float = 50) -> ChannelFrame
 .resampling(target_sr: float, **kwargs) -> ChannelFrame
 ```
 
-### trim
+`fade()` は両端に対称 Tukey window を適用する。
+
+## Channel and time operations
+
 ```python
-.trim(start: float = 0, end: float | None = None) -> ChannelFrame
+.channel_difference(other_channel: int | str = 0) -> ChannelFrame
 ```
-- `start`, `end`: 秒単位の時間。`end=None` で信号末尾まで
 
-### fix_length
+選択した reference channel を各 channel の同じ array index から引く。`source_time_offset` を使った時間 alignment は行わない。
+
 ```python
-.fix_length(length: int | None = None, duration: float | None = None) -> ChannelFrame
-```
-- `length`: サンプル数で指定
-- `duration`: 秒数で指定（どちらか一方）
-
-### fade
-```python
-.fade(fade_ms: float = 50) -> ChannelFrame
-```
-Tukey 窓によるフェードイン/アウト（対称）。
-
-## 音圧レベル
-
-### sound_level
-```python
-.sound_level(
-    freq_weighting: str | None = "Z",
-    time_weighting: str = "Fast",
-    dB: bool = False
+.hpss_harmonic(
+    kernel_size=31,
+    power=2,
+    margin=1,
+    n_fft=2048,
+    hop_length=None,
+    win_length=None,
+    window="hann",
+    center=True,
+    pad_mode="constant",
 ) -> ChannelFrame
-```
-- `freq_weighting`: `"A"`, `"C"`, `"Z"`
-- `time_weighting`: `"Fast"`（125ms 時定数）, `"Slow"`（1s 時定数）
-- `dB=False`: 線形値（デフォルト）。`dB=True` で dB 換算
-- **注意**: 正しい dB SPL を得るには `ch_units=['Pa']` を設定すること
 
-### rms_trend
+.hpss_percussive(...) -> ChannelFrame
+```
+
+`wandas[effects]` を必要とする。
+
+## Level operations
+
 ```python
 .rms_trend(
     frame_length: int = 2048,
     hop_length: int = 512,
     dB: bool = False,
-    Aw: bool = False
+    Aw: bool = False,
 ) -> ChannelFrame
 ```
-- `Aw=True`: A 重み付きフィルタを適用してから RMS 計算
 
-## HPSS（調和-打楽音分離）
+- centered, zero-padded sliding RMS。
+- `dB=False`: calibrated linear unit。
+- `dB=True`: `20 * log10(max(window_rms / channel_ref, 1e-12))`。下限 -240 dB。
+- 出力 sampling rate は入力を `hop_length` で割った値。
 
-### hpss_harmonic / hpss_percussive
 ```python
-.hpss_harmonic(
-    kernel_size: int = 31,
-    power: float = 2,
-    margin: float = 1,
-    n_fft: int = 2048,
-    hop_length: int | None = None,
-    win_length: int | None = None,
-    window: str = "hann",
-    center: bool = True,
-    pad_mode: str = "constant"
+.sound_level(
+    freq_weighting: str | None = "Z",
+    time_weighting: str = "Fast",
+    dB: bool = False,
 ) -> ChannelFrame
 ```
-librosa の HPSS アルゴリズムを使用。
+
+- A/C/Z frequency weighting の後、Fast 125 ms または Slow 1 s の exponential power average を取る。
+- `dB=False`: calibrated linear RMS。
+- `dB=True`: `10 * log10(max(smoothed_power / ref**2, 1e-20))`。下限 -200 dB。
+- full sound-level-meter conformity を保証しない。
+
+```python
+frame.rms -> ndarray  # shape: (n_channels,)
+```
+
+全 sample の calibrated linear RMS を即時計算する。lineage/history は増やさない。
+
+## Calibration rules
+
+```python
+calibrated = frame.with_calibration(
+    {"mic": wd.ChannelCalibration(factor=0.42, unit="Pa")}
+)
+reference = calibrated.channels[0].level_reference
+level = reference.to_level(calibrated.rms[0])
+```
+
+- Pa の既定 ref は `2e-5` で、level unit は `dB SPL`。
+- explicit `FS` / ref 1 は `dBFS`。
+- unit 未設定/ref 1 は generic `dB re 1 input unit`。
+- `to_level()` は calibrated linear amplitude を受け取り、factor を再適用しない。

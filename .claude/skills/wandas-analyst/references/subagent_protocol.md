@@ -1,104 +1,74 @@
-# wandas-analyst: Sub-Agent Protocol
+# wandas-analyst: Focused Agent Protocol
 
-## サブエージェントの種類と責任
+## Roles
 
-| エージェント | 呼び出し回数 | 入力 | 出力 |
-|-------------|------------|------|------|
-| Diagnostician | 1回（冒頭）| ファイルパス群 | 信号品質・推奨解析 |
-| Analysis Agent | ラウンドごと | 問い＋種別＋前発見サマリー | コード＋発見 |
-| Synthesis Agent | 1回（最後）| 目的＋全発見サマリー | 結論・仮説検証 |
+| Role | Input | Output | Frequency |
+|---|---|---|---|
+| Diagnostician | files, conditions, intended quantities | quality/calibration report, viable analyses | once at start |
+| Analysis agent | one question, relevant prior findings, files | runnable code, small evidence, finding/caveat | once per round |
+| Synthesis agent | purpose, hypotheses, validated findings | conclusion, uncertainty, action | once at end |
 
----
+## Context isolation
 
-## コンテキスト最小化の原則
+各 agent へ必要な情報を self-contained に渡す。`先ほどの続き` のような参照を避ける。
 
-各サブエージェントは **独立した文脈** で動作する。親セッションの履歴は渡さない。
+Analysis handoff には次だけを含める。
 
-```
-❌ 悪い例: "先ほどの解析の続きで..."
-✅ 良い例: 必要な情報（ファイルパス・発見テキスト）を全部プロンプトに含める
-```
+- current question
+- file paths and condition meaning
+- known calibration
+- validated prior observations/caveats
+- exact expected output format
 
-**Analysis Agent へのコンテキスト伝達:**
-```
-CONTEXT: {前ラウンドの FINDINGS テキストのみ}
-         （コード・数値・グラフは渡さない。発見の文章だけ）
-```
+Raw arrays、全 notebook、意図した答えは渡さない。
 
----
+## Diagnostic gates
 
-## Diagnostician の出力解析
+| Issue | Action |
+|---|---|
+| unknown calibration | dBFS/generic relative results に限定し、dB SPL と呼ばない |
+| possible clipping | original source を保持し、acquisition limitation として報告する。normalize で隠さない |
+| DC offset | 仮説に影響するか判断し、必要なら `.remove_dc()` を明示した branch で比較する |
+| sampling-rate mismatch | comparison 前に target rate と情報損失を決める |
+| length mismatch | `.concat_frame(..., align=...)` の意味を決める。default strict を優先する |
+| psychoacoustic extra missing | `wandas[psychoacoustic]` を要求し、private implementation で代用しない |
+| insufficient high-frequency content | resampling で情報が増えないことを明記し、psychoacoustic claim を止める |
 
-出力の `RECOMMENDED_ANALYSES` を使ってラウンドを計画する:
+Clipping check は `channel.level_reference.unit == "dBFS"` のように full-scale domain が確認できる場合だけ行う。Pa や generic sensor unit の `ref` は full-scale limit ではない。`abs(data) >= 0.999` の比率や反復 peak はスクリーニングに過ぎず、WAV subtype/量子化段が不明なら「possible clipping」と報告する。
 
-| 推奨 | 意味 | 最初のラウンドに適する場合 |
-|------|------|--------------------------|
-| `temporal` | 波形の形状・振幅に着目 | 振動・衝撃系の解析 |
-| `spectral` | 周波数成分の特定 | 機械ノイズ・音程系の解析 |
-| `level` | 全体レベルの評価 | 騒音評価・環境基準対比 |
-| `stft` | 時間変化する周波数成分 | 異常検知・過渡現象 |
-| `coherence` | 2ch 間の因果関係 | 入出力特性・伝達関数 |
-| `psycho` | 主観品質との対応 | 製品音質評価 |
-| `comparison` | 条件間の差分 | 処置効果・改善量の定量化 |
+回転次数は既知 RPM またはタコ同期との照合が必要。FFT/Welch peak、harmonic spacing、cepstrum/cepstrogram だけなら「periodic/rotational candidate」とし、1×・2×のような次数を確定しない。
 
-**クリッピング検出時の対応:**
-```python
-# クリッピングが検出された場合は前処理セルを追加
-if "clipping" in issues:
-    # 正規化して再読み込み
-    frame = wd.read_wav(file, normalize=True)
-```
+## Round selection
 
----
+| Finding | Useful next round |
+|---|---|
+| broadband amplitude difference | calibrated level or N-octave comparison |
+| narrow peaks | FFT/Welch amplitude; STFT for timing |
+| periodic spectral spacing | cepstrum/cepstrogram |
+| time-local event | STFT + nearest `.times` index |
+| input-output relationship | typed coherence/transfer selected pair |
+| perceived quality difference | calibrated psychoacoustic metrics |
 
-## 収束判断フロー
+Do not schedule every analysis category by default.
 
-```
-発見を受け取ったら → 以下の3問に答える
+## Convergence
 
-Q1: この発見は仮説を支持するか？
-    → 支持: 確認できた（次の仮説に移る）
-    → 否定: 仮説を修正する
-    → 拡張: 新たな問いが生まれた（次ラウンドへ）
+Continue only when the next result could materially change the decision. Stop when:
 
-Q2: 次に調べる価値があるか？
-    → 示唆が "converged" なら終了候補
-    → 残りの仮説がまだあれば継続
+- purpose is answered with evidence;
+- remaining uncertainty comes from missing calibration/data rather than another transform;
+- next question is merely confirmatory;
+- seven rounds are complete.
 
-Q3: 目的に対して十分か？
-    → 最初の調査目的に答えられたら終了
-    → 答えられていなければ継続
-```
+## Synthesis handoff
 
-**最大ラウンド数:** 7ラウンドを超えたら強制的に Synthesis に移行する（コンテキスト肥大化防止）
+Pass:
 
----
+- purpose and decision;
+- hypotheses;
+- each round's question;
+- small numerical summary with unit;
+- observation, interpretation, caveat;
+- excluded/failed analyses and why.
 
-## Synthesis Agent への情報伝達
-
-```
-✅ 渡すもの:
-  - 調査目的（テキスト）
-  - 初期仮説リスト（テキスト）
-  - 各ラウンドの FINDINGS テキスト（観察・解釈・示唆）
-
-❌ 渡さないもの:
-  - 解析コード
-  - 数値配列・生データ
-  - グラフ/画像
-  - 中間変数の値
-```
-
-この分離が **確証バイアスを防ぐ**。Synthesis は自分でデータを解釈する前に
-「人間の目で見た発見」だけから結論を書くため、客観性が保たれる。
-
----
-
-## エラーハンドリング
-
-| 状況 | 対処 |
-|------|------|
-| Analysis Agent が BLOCKED を返す | 問いを細分化して再試行 |
-| ファイルが読み込めない | Diagnostician の前に手動確認 |
-| 心理音響が失敗（sr 不足）| sr を確認し `resampling(48000)` を前処理に追加 |
-| Synthesis の未解決の問いが多い | 最も重要な1つを追加ラウンドとして実施 |
+Do not pass giant arrays. Do not hide unresolved calibration or alignment limits.
