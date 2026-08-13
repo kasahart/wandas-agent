@@ -34,11 +34,5 @@ jobs:
       - name: Install pytest
         run: pip install pytest
 
-      - name: Run API execution tests
-        run: pytest tests/skills/test_api_execution.py -v
-
-      - name: Run SKILL.md structure tests
-        run: pytest tests/skills/test_skill_structure.py -v
-
-      - name: Run API signature tests
-        run: pytest tests/skills/test_api_signatures.py -v
+      - name: Run skill tests
+        run: pytest tests/skills -v
