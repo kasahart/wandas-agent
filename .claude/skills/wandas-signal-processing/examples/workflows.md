@@ -64,7 +64,7 @@ roughness_spec = signal.roughness_dw_spec(overlap=0.5)
 roughness_spec.plot(cmap="viridis", title="Specific roughness [asper/Bark]")
 ```
 
-## Scenario 4: RMS amplitude level の時間変化を見る
+## Scenario 4: RMS vibration amplitude の時間変化を見る
 
 ```python
 import wandas as wd
@@ -74,13 +74,11 @@ calibrated = signal.with_calibration(
     {0: wd.ChannelCalibration(factor=9.81, unit="m/s^2")}
 )
 
-rms_z = calibrated.rms_trend(dB=True, Aw=False)
-rms_a = calibrated.rms_trend(dB=True, Aw=True)
-
-ax = rms_z.plot(overlay=True, label="Z-weighted")
-rms_a.plot(ax=ax, overlay=True, label="A-weighted", title="RMS level comparison")
-ax.legend()
+rms_vibration = calibrated.rms_trend(dB=False, Aw=False)
+rms_vibration.plot(title="RMS acceleration [m/s^2]")
 ```
+
+音響A特性は音圧用であり、加速度へ適用しない。人体振動などの評価では、対象規格と測定軸に対応する振動重み付けを別途確認する。
 
 ## Scenario 5: HPSS で harmonic/percussive を分離する
 
