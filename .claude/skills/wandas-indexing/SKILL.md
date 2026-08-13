@@ -1,6 +1,6 @@
 ---
 name: wandas-indexing
-description: Use when selecting or slicing wandas frames by channel index, channel label, channel metadata query, boolean mask, NumPy index array, or multidimensional indexing such as frame[channel, sample_slice] and spectrogram[channel, freq_slice, time_slice].
+description: Use when selecting or slicing Wandas 0.7.2 frames by channel index, channel label, channel metadata query, boolean mask, NumPy index array, or multidimensional indexing such as frame[channel, sample_slice] and spectrogram[channel, :, time_slice].
 ---
 
 # wandas: Indexing and Selection
@@ -9,7 +9,7 @@ wandas frame の `[]` は **先頭の indexing 要素を channel 選択**とし�
 
 ## Mandatory Rules
 
-1. **Wandas-first**: channel selection, sample slicing, spectral slicing は wandas frame の `[]` / `.get_channel()` を使う。NumPy 配列へ変換してから独自に切り出すのは、最終的な数値抽出が必要な場合だけにする。
+1. **Wandas-first**: channel selection、sample/time-frame slicing は Wandas Frame の `[]` / `.get_channel()` を使う。NumPy 配列へ変換してから独自に切り出すのは、最終的な数値抽出が必要な場合だけにする。
 2. **Method chaining**: selection 後も wandas frame が返るので、`.high_pass_filter(...).normalize().fft()` のようにチェーンを継続する。
 3. **Visualization**: selection 結果は `.plot()` / `.describe()` で確認する。`matplotlib` / `plt.plot(frame.data)` による直接描画は禁止。
 
@@ -24,7 +24,7 @@ wandas frame の `[]` は **先頭の indexing 要素を channel 選択**とし�
 | `frame[["x", "z"]]` | `list[str]` | same frame type | 複数 channel label を選択 |
 | `frame[np.array([0, 2])]` | integer ndarray | same frame type | NumPy integer array で channel 選択 |
 | `frame[np.array([True, False, True])]` | boolean ndarray | same frame type | boolean mask で channel 選択。長さは `n_channels` と一致必須 |
-| `frame[channel_key, ...]` | tuple | same frame type | 1要素目で channel 選択、2要素目以降で残りの軸を slice |
+| `frame[channel_key, ...]` | tuple | same frame type | 1要素目で channel 選択、2要素目以降で残りの軸を連続 slice |
 | `frame.get_channel(channel_idx)` | int/list/tuple/int ndarray/bool ndarray | same frame type | channel index 系の選択 |
 | `frame.get_channel(query=...)` | str/regex/callable/dict | same frame type | channel metadata query で選択 |
 | `frame.label2index(label)` | str | int | channel label から index を取得 |
@@ -146,7 +146,7 @@ assert spectrum.n_channels == 1
 assert hasattr(spectrum, "freqs")
 ```
 
-### STFT / spectrogram の channel, frequency, time slicing
+### STFT / spectrogram の channel と time-frame slicing
 
 ```python
 import numpy as np
@@ -161,15 +161,18 @@ data = np.vstack([
 frame = wd.from_numpy(data, sampling_rate=sr, ch_labels=["low", "high"])
 spec = frame.stft(n_fft=512, hop_length=128)
 
-# tuple の1要素目は channel、2要素目は frequency bin、3要素目は time frame
-low_freq_ch0 = spec[0, :20, :]
+# tuple の1要素目は channel、2要素目は complete frequency axis、
+# 3要素目は time frame。canonical frequency grid は部分 slice しない。
+channel_0 = spec[0]
 time_window = spec[:, :, 2:8]
 
-assert low_freq_ch0.n_channels == 1
+assert channel_0.n_channels == 1
 assert time_window.n_channels == 2
-assert hasattr(low_freq_ch0, "freqs")
+assert channel_0.freqs.shape == spec.freqs.shape
 assert hasattr(time_window, "times")
 ```
+
+`SpectralFrame` / `SpectrogramFrame` は `n_fft // 2 + 1` 個の canonical one-sided frequency grid を保持するため、`spec[:, :20, :]` のような frequency-bin 部分 slice は拒否される。表示範囲は `.plot(fmin=..., fmax=...)`、数値抽出だけなら `.freqs` / `.magnitude` への mask を使う。
 
 ## Common Mistakes
 
@@ -182,9 +185,10 @@ assert hasattr(time_window, "times")
 | boolean mask の長さが channel 数と違う | `len(mask) == frame.n_channels` にする |
 | `frame["mic"]` が部分一致すると期待する | label selection は完全一致。部分一致・正規表現は `get_channel(query=re.compile(...))` を使う |
 | metadata query を `frame[...]` に渡す | dict/callable query は `frame.get_channel(query=...)` を使う |
-| `frame[0, 100:200]` 後の `time` が元信号の絶対時刻を保つと期待する | slicing 後の `time` は切り出し frame の先頭を 0 として扱う。元時刻が必要なら offset を別途管理する |
+| `spec[:, :20, :]` で周波数範囲を持つ Frame を作る | canonical frequency grid は部分 slice できない。plot範囲は `fmin/fmax`、数値抽出は property の mask |
+| `frame[0, 100:200]` 後の `time` が元信号の絶対時刻を保つと期待する | local `time` は0から始まり、元位置は `source_time_offset` に自動記録される |
 | 単一 channel 選択後の `.data` が常に2Dだと仮定する | 通常 frame の `.data` は単一 channel で channel axis が squeeze される。shape は必要に応じて確認する |
-| selection が `operation_history` に残ると期待する | selection は履歴に追加されない。解析レポートには選択条件を明示的に記録する |
+| selection が履歴に残らないと考える | v0.7.2 の selection/slicing は `wandas.frame.index` として lineage と `operation_history` に記録される |
 
 ## Documentation Map
 

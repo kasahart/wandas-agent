@@ -1,6 +1,6 @@
 # wandas indexing API reference
 
-ソース: `wandas/wandas/core/base_frame.py` at submodule commit `2c76deb0a9f0d8076a69dd9139474ec2a218b9ab`.
+ソース: `wandas/wandas/core/base_frame.py` at Wandas v0.7.2 / submodule commit `1aed2d9513b7b08f1de3b65576fe4db4005fbeee`.
 
 ## `BaseFrame.get_channel(channel_idx=None, query=None, validate_query_keys=True)`
 
@@ -12,7 +12,7 @@
 - callable query は `ChannelMetadata` を受け取り truthy な channel を選ぶ。
 - dict query は `ChannelMetadata` の field または channel `extra` key に対する equality / regex 条件。
 - match なしは `KeyError`。
-- selection は新しい frame を返すが、selection operation は `operation_history` に追加しない。
+- selection は immutable な新しい Frame を返し、`wandas.frame.index` として lineage と `operation_history` に記録する。
 
 ## `BaseFrame.__getitem__(key)`
 
@@ -39,12 +39,20 @@ Errors:
 
 - `len(key) > self._data.ndim` は `ValueError`。
 - `key[0]` は channel key として再帰的に `self[channel_key]` で処理される。
-- `key[1:]` は選択済み frame の `_data[(slice(None),) + time_keys]` に適用される。
-- そのため `frame[channel_key, sample_slice]` や `spec[channel_key, freq_slice, time_slice]` のように書く。
-- 秒単位ではなく、sample index / frequency bin / time-frame index を渡す。
+- `key[1:]` は選択済み Frame の non-channel semantic axes に適用され、すべて `slice` でなければならない。
+- time axis は連続forward sliceだけを受け付け、step/reverse sliceは拒否する。
+- `frame[channel_key, sample_slice]` や `spec[channel_key, :, time_slice]` のように書く。秒単位ではなく sample / time-frame index を渡す。
+- time slice の開始位置は `source_time_offset` に加算される一方、slice後の local `.time` / `.times` は0から始まる。
+- `SpectralFrame` / `SpectrogramFrame` は complete canonical one-sided gridを要求するため、frequency-bin部分sliceはconstructor validationで拒否される。
 
 ## `.data` と shape の注意
 
 - `.data` は `.compute()` を呼び、Dask graph を materialize する。
 - `n_channels == 1` の通常 frame では `.data` が `axis=0` で squeeze される。
 - frame を維持して chain を続ける場合は `.data` ではなく frame のまま扱う。
+
+## Spectral frequency range
+
+- 表示範囲だけを絞る: `spectrogram.plot(fmin=20, fmax=8_000)`。
+- 数値だけを抽出する: `mask = (spectrum.freqs >= 20) & (spectrum.freqs <= 8_000)` の後、`spectrum.magnitude[..., mask]`。
+- 部分frequency gridを持つ `SpectralFrame` / `SpectrogramFrame` は作らない。
