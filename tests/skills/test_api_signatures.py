@@ -1,79 +1,54 @@
-"""
-API シグネチャ照合テスト
+"""Static checks that skill-facing Wandas 0.7.2 API contracts still exist."""
 
-SKILL.md に記載されたメソッド名・引数名が wandas ソースコードに実際に存在するか確認する。
-wandas のアップデートで API が変わった場合にスキルの陳腐化を早期検出する。
-"""
+from __future__ import annotations
+
+import inspect
+import json
 from pathlib import Path
-import re
+
 import pytest
-
-WANDAS_SRC = Path("wandas/wandas")
-
-
-def grep_in_source(pattern: str) -> list[str]:
-    """wandas ソース内で pattern にマッチする行を返す"""
-    results = []
-    for py_file in WANDAS_SRC.rglob("*.py"):
-        for line in py_file.read_text(encoding="utf-8", errors="ignore").splitlines():
-            if re.search(pattern, line):
-                results.append(f"{py_file}:{line.strip()}")
-    return results
+import wandas as wd
 
 
-def method_exists(method_name: str) -> bool:
-    return bool(grep_in_source(rf"\bdef {re.escape(method_name)}\b"))
+SKILLS_DIR = Path(".claude/skills")
 
 
-def param_exists_in_method(method_name: str, param_name: str) -> bool:
-    """メソッド定義の近傍（複数行シグネチャ対応）に引数名が含まれるか"""
-    for py_file in WANDAS_SRC.rglob("*.py"):
-        text = py_file.read_text(encoding="utf-8", errors="ignore")
-        for match in re.finditer(rf"\bdef {re.escape(method_name)}\b", text):
-            # def 行から最大 500 文字を見る（複数行シグネチャに対応）
-            snippet = text[match.start():match.start() + 500]
-            if param_name in snippet:
-                return True
-    return False
-
-
-# ---------------------------------------------------------------------------
-# メソッド存在チェック
-# ---------------------------------------------------------------------------
-
-REQUIRED_METHODS = [
-    # I/O
-    "read_wav",
-    "read_csv",
-    "generate_sin",
+TOP_LEVEL_APIS = [
+    "read",
+    "load",
+    "supported_formats",
     "from_numpy",
-    # フィルタ
+    "from_folder",
+    "generate_sin",
+]
+
+
+CHANNEL_FRAME_METHODS = [
+    "cache",
+    "astype",
+    "concat_frame",
+    "with_calibration",
     "high_pass_filter",
     "low_pass_filter",
     "band_pass_filter",
     "a_weighting",
     "normalize",
     "remove_dc",
-    # 時間操作
     "resampling",
     "trim",
     "fix_length",
-    # 音圧
     "sound_level",
     "rms_trend",
-    # 心理音響
     "loudness_zwtv",
     "loudness_zwst",
     "roughness_dw",
     "roughness_dw_spec",
     "sharpness_din",
     "sharpness_din_st",
-    # スペクトル
     "fft",
-    "ifft",
     "stft",
-    "istft",
     "welch",
+    "cepstrum",
     "noct_spectrum",
     "coherence",
     "csd",
@@ -81,61 +56,104 @@ REQUIRED_METHODS = [
 ]
 
 
-@pytest.mark.parametrize("method_name", REQUIRED_METHODS)
-def test_method_exists_in_source(method_name):
-    assert method_exists(method_name), \
-        f"def {method_name} が wandas ソースに見つからない — スキルの記述が古い可能性"
+@pytest.mark.parametrize("api_name", TOP_LEVEL_APIS)
+def test_top_level_api_is_publicly_exported(api_name):
+    assert callable(getattr(wd, api_name, None)), f"wd.{api_name} is not publicly callable"
 
 
-# ---------------------------------------------------------------------------
-# 重要な引数名チェック
-# 過去に間違いが起きた / 混同しやすい引数名を明示的に検証する
-# ---------------------------------------------------------------------------
+@pytest.mark.parametrize("method_name", CHANNEL_FRAME_METHODS)
+def test_channel_frame_method_is_public(method_name):
+    assert callable(getattr(wd.ChannelFrame, method_name, None))
+
+
+@pytest.mark.parametrize(
+    "owner,method_name",
+    [
+        (wd.SpectralFrame, "ifft"),
+        (wd.SpectrogramFrame, "istft"),
+        (wd.SpectrogramFrame, "get_frame_at"),
+        (wd.CoherenceFrame, "select_pair"),
+        (wd.CrossSpectralFrame, "select_pair"),
+        (wd.TransferFunctionFrame, "select_pair"),
+    ],
+)
+def test_typed_frame_method_is_public(owner, method_name):
+    assert callable(getattr(owner, method_name, None))
+
 
 CRITICAL_PARAMS = [
-    # (method_name, correct_param, wrong_param_hint)
-    ("band_pass_filter", "low_cutoff",  "low ではなく low_cutoff"),
-    ("band_pass_filter", "high_cutoff", "high ではなく high_cutoff"),
-    ("high_pass_filter", "cutoff",      "high_cutoff ではなく cutoff"),
-    ("low_pass_filter",  "cutoff",      "low_cutoff ではなく cutoff"),
-    ("noct_spectrum",    "fmin",        "freq_min ではなく fmin"),
-    ("noct_spectrum",    "fmax",        "freq_max ではなく fmax"),
-    ("loudness_zwtv",    "field_type",  "field ではなく field_type"),
-    ("loudness_zwst",    "field_type",  "field ではなく field_type"),
-    ("sharpness_din_st", "field_type",  "field ではなく field_type"),
+    (wd, "read", "file_type"),
+    (wd, "read", "source_name"),
+    (wd, "from_folder", "metadata_resolver"),
+    (wd, "from_folder", "path_metadata"),
+    (wd.ChannelFrame, "band_pass_filter", "low_cutoff"),
+    (wd.ChannelFrame, "band_pass_filter", "high_cutoff"),
+    (wd.ChannelFrame, "sound_level", "freq_weighting"),
+    (wd.ChannelFrame, "sound_level", "time_weighting"),
+    (wd.ChannelFrame, "cepstrum", "floor"),
+    (wd.ChannelFrame, "noct_spectrum", "fmin"),
+    (wd.ChannelFrame, "noct_spectrum", "fmax"),
+    (wd.ChannelFrame, "csd", "scaling"),
+    (wd.ChannelFrame, "transfer_function", "scaling"),
+    (wd.CoherenceFrame, "select_pair", "output"),
+    (wd.CoherenceFrame, "select_pair", "input"),
+    (wd.SpectrogramFrame, "get_frame_at", "time_idx"),
 ]
 
 
-@pytest.mark.parametrize("method_name,param_name,hint", CRITICAL_PARAMS,
-                         ids=[f"{m}-{p}" for m, p, _ in CRITICAL_PARAMS])
-def test_critical_param_exists(method_name, param_name, hint):
-    assert param_exists_in_method(method_name, param_name), \
-        f"{method_name} の引数 '{param_name}' が見つからない（{hint}）"
+@pytest.mark.parametrize("owner,method_name,param_name", CRITICAL_PARAMS)
+def test_critical_parameter_exists_on_public_owner(owner, method_name, param_name):
+    parameters = inspect.signature(getattr(owner, method_name)).parameters
+    assert param_name in parameters, f"{owner}.{method_name} no longer has parameter {param_name}"
 
 
-# ---------------------------------------------------------------------------
-# デフォルト値チェック
-# スキルに記載したデフォルト値が実際と一致するか
-# ---------------------------------------------------------------------------
-
-DEFAULT_CHECKS = [
-    # (method_name, expected_default_substring)
-    # 型アノテーション付き形式（dB: bool = False）でチェック
-    ("sound_level",  "= False"),    # dB のデフォルトは False（True ではない）
-    ("band_pass_filter", "= 4"),    # order のデフォルトは 4
-    ("high_pass_filter", "= 4"),
-    ("low_pass_filter",  "= 4"),
-]
+@pytest.mark.parametrize("api_name", ["read", "read_wav"])
+def test_read_apis_do_not_have_normalize_parameter(api_name):
+    assert "normalize" not in inspect.signature(getattr(wd, api_name)).parameters
 
 
-@pytest.mark.parametrize("method_name,expected_default", DEFAULT_CHECKS,
-                         ids=[f"{m}-default" for m, _ in DEFAULT_CHECKS])
-def test_default_value_matches_source(method_name, expected_default):
-    """def 行から 500 文字以内にデフォルト値の記述があるか確認（複数行シグネチャ対応）"""
-    for py_file in WANDAS_SRC.rglob("*.py"):
-        text = py_file.read_text(encoding="utf-8", errors="ignore")
-        for match in re.finditer(rf"\bdef {re.escape(method_name)}\b", text):
-            snippet = text[match.start():match.start() + 500]
-            if expected_default in snippet:
-                return  # found
-    pytest.fail(f"{method_name} のデフォルト値 '{expected_default}' がソースに見つからない")
+EXPECTED_RETURNS = {
+    "coherence": "CoherenceFrame",
+    "csd": "CrossSpectralFrame",
+    "transfer_function": "TransferFunctionFrame",
+}
+
+
+@pytest.mark.parametrize("method_name,return_name", EXPECTED_RETURNS.items())
+def test_pairwise_transform_has_typed_return(method_name, return_name):
+    annotation = inspect.signature(getattr(wd.ChannelFrame, method_name)).return_annotation
+    assert return_name in str(annotation)
+
+
+def test_level_reference_is_public():
+    assert wd.LevelReference.__module__.startswith("wandas")
+
+
+def test_skills_declare_current_version():
+    skill_files = sorted(SKILLS_DIR.glob("*/SKILL.md"))
+    assert skill_files
+    for skill_file in skill_files:
+        content = skill_file.read_text(encoding="utf-8")
+        assert "0.7.2" in content, f"{skill_file} does not identify the pinned Wandas contract"
+
+
+def test_analyst_template_includes_dc_and_domain_aware_clipping_checks():
+    path = SKILLS_DIR / "wandas-analyst" / "templates" / "analysis_report.ipynb"
+    notebook = json.loads(path.read_text(encoding="utf-8"))
+    source = "\n".join(
+        "".join(cell.get("source", []))
+        for cell in notebook["cells"]
+        if cell["cell_type"] == "code"
+    )
+    assert "dc_offset" in source
+    assert "near_fs_fraction" in source
+    assert "references[index].unit == 'dBFS'" in source
+
+
+def test_acceleration_workflow_does_not_apply_acoustic_a_weighting():
+    path = SKILLS_DIR / "wandas-signal-processing" / "examples" / "workflows.md"
+    scenario = path.read_text(encoding="utf-8").split("## Scenario 4:", maxsplit=1)[1]
+    scenario = scenario.split("## Scenario 5:", maxsplit=1)[0]
+    assert 'unit="m/s^2"' in scenario
+    assert "Aw=True" not in scenario
+    assert "dB=False" in scenario

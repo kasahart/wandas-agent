@@ -1,98 +1,102 @@
 # wandas-spectral-analysis: Workflows
 
-## Scenario 1: FFT で卓越周波数を特定する
+## Scenario 1: FFT で peak frequency を特定する
 
 ```python
-import wandas as wd
 import numpy as np
+import wandas as wd
 
-signal = wd.read_wav("machine.wav")
-
-# FFT スペクトル
+signal = wd.read("machine.wav")
 spectrum = signal.fft()
-spectrum.plot(title="Frequency Spectrum")
 
-# 卓越周波数を取得
-peak_freq = spectrum.freqs[np.argmax(np.abs(spectrum.data))]
-print(f"卓越周波数: {peak_freq:.1f} Hz")
-
-# A 重み付きスペクトルで比較
-spectrum.plot(Aw=True, title="A-weighted Spectrum")
+peak_index = np.argmax(spectrum.magnitude)
+print(f"Peak frequency: {spectrum.freqs[peak_index]:.1f} Hz")
+spectrum.plot(xlim=(20, 8_000), title="Peak-amplitude spectrum")
 ```
 
-## Scenario 2: Welch 法で時間平均 PSD を求める
+`.magnitude` と `.data` は mono なら `(frequency,)`。multi-channel では `(channel, frequency)`。
+
+## Scenario 2: Welch average で安定した amplitude spectrum を得る
 
 ```python
 import wandas as wd
 
-signal = wd.read_wav("noise.wav")
+signal = wd.read("noise.wav")
+mean_spectrum = signal.welch(n_fft=4_096, hop_length=1_024, average="mean")
+median_spectrum = signal.welch(n_fft=4_096, hop_length=1_024, average="median")
 
-# Welch PSD（時間平均化で安定した推定）
-psd = signal.welch(n_fft=4096, hop_length=1024, average="mean")
-psd.plot(title="Welch Power Spectral Density")
-
-# Median 平均（外れ値に頑健）
-psd_med = signal.welch(n_fft=4096, hop_length=1024, average="median")
+ax = mean_spectrum.plot(overlay=True, label="Mean")
+median_spectrum.plot(ax=ax, overlay=True, label="Median", title="Welch amplitude comparison")
+ax.legend()
 ```
 
-## Scenario 3: STFT で時間変動と異常を検知する
+Wandas の Welch 結果は peak amplitude であり、PSD/per-Hz ではない。
+
+## Scenario 3: STFT で異常時刻を調べる
 
 ```python
+import numpy as np
 import wandas as wd
 
-sensor = wd.read_csv("sensor_log.csv", time_column="Time")
-
-# STFT スペクトログラム（時間-周波数分解能のトレードオフを調整）
-spectrogram = (sensor
-    .high_pass_filter(cutoff=50)
-    .stft(n_fft=2048, hop_length=256))  # hop 小さい = 時間解像度高い
+signal = wd.read("sensor-log.csv", time_column="Time")
+spectrogram = signal.remove_dc().stft(n_fft=2_048, hop_length=256)
 
 spectrogram.plot(
     cmap="inferno",
     fmin=0,
-    fmax=2000,
+    fmax=2_000,
     vmin=-80,
     vmax=-20,
-    title="Anomaly Detection Spectrogram"
+    title="Time-frequency map",
 )
 
-# 特定時刻のスペクトルを取り出す
-frame_at_t = spectrogram.get_frame_at(10)  # 10秒時点
-frame_at_t.plot(title="Spectrum at t=10s")
+time_index = int(np.argmin(np.abs(spectrogram.times - 10.0)))
+spectrogram.get_frame_at(time_index).plot(title="Spectrum near 10 s")
 ```
 
-## Scenario 4: 1/3 オクターブバンドで周波数帯域評価
+## Scenario 4: Cepstrogram から時間変動する envelope を得る
 
 ```python
 import wandas as wd
 
-signal = wd.read_wav("environment.wav")
+signal = wd.read("speech.wav")
+cepstrogram = signal.stft(n_fft=2_048, hop_length=256).cepstrum()
+envelope = cepstrogram.lifter(cutoff=0.002, mode="low").to_spectral_envelope()
 
-# 1/3 オクターブバンドスペクトル
-noct = signal.noct_spectrum(fmin=25, fmax=8000, n=3)
-noct.plot(title="1/3 Octave Band Spectrum")
-
-# A 重み付き表示
-noct.plot(Aw=True, title="A-weighted 1/3 Octave")
+cepstrogram.plot(qmax=0.02, title="Cepstrogram")
+envelope.plot(fmin=20, fmax=8_000, title="Time-varying spectral envelope")
 ```
 
-## Scenario 5: 伝達関数とコヒーレンスで入出力関係を分析する
+## Scenario 5: Fractional-octave band level を見る
+
+`wandas[psychoacoustic]` を導入してから実行する。
 
 ```python
 import wandas as wd
 
-# 入力・出力信号を読み込み
-input_sig = wd.read_wav("input.wav")
-output_sig = wd.read_wav("output.wav")
-
-# 2チャンネルフレームに結合
-combined = input_sig.add_channel(output_sig)
-
-# 伝達関数
-tf = combined.transfer_function(n_fft=2048)
-tf.plot_matrix()
-
-# コヒーレンス（1.0 に近いほど信頼性が高い）
-coh = combined.coherence(n_fft=2048)
-coh.plot(title="Coherence (1.0 = highly correlated)")
+signal = wd.read("environment.wav")
+bands = signal.noct_spectrum(fmin=25, fmax=8_000, n=3)
+bands.plot(Aw=True, title="A-weighted 1/3-octave levels")
 ```
+
+Output は各 band の RMS amplitude。`.dB` / `.dBA` は channel reference 相対 level。
+
+## Scenario 6: input-output pair を明示して解析する
+
+```python
+import wandas as wd
+
+excitation = wd.read("input.wav").rename_channels({0: "input"})
+response = wd.read("output.wav").rename_channels({0: "output"})
+combined = excitation.concat_frame(response)
+
+coherence = combined.coherence(n_fft=2_048).select_pair(output=1, input=0)
+csd = combined.csd(n_fft=2_048, scaling="density").select_pair(output=1, input=0)
+transfer = combined.transfer_function(n_fft=2_048).select_pair(output=1, input=0)
+
+coherence.plot(title="Coherence")
+csd.plot(view="level", title="Cross-spectral density level")
+transfer.plot(view="gain_db", title="Transfer gain")
+```
+
+`gain_db` は input/output の pair domain が dimensionless のときだけ使える。異なる単位間では `transfer_level_db` を選ぶ。

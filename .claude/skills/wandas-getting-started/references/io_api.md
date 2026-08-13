@@ -1,127 +1,158 @@
-# wandas I/O API Reference
+# Wandas 0.7.2 I/O and Core API Reference
 
-## wd.read_wav
+ソース: `wandas/wandas/io/read.py`, `wandas/wandas/frames/channel.py`, `wandas/wandas/core/base_frame.py`, `wandas/wandas/core/metadata.py`, `wandas/wandas/utils/frame_dataset.py`
 
-```python
-wd.read_wav(
-    filename: str | Path,
-    labels: list[str] | None = None,
-    normalize: bool = False
-) -> ChannelFrame
-```
+## Contents
 
-- `filename`: WAV ファイルパス
-- `labels`: チャンネル名リスト（省略時は "ch0", "ch1", ...）
-- `normalize`: `True` で [-1, 1] に正規化。`False`（デフォルト）は生 PCM 値（16bit なら ±32768 スケール）
+1. Unified reading
+2. Construction and datasets
+3. Frame materialization and reuse
+4. Calibration and measurement levels
+5. Persistence and compatibility APIs
 
-## wd.read_csv
+## Unified reading
 
 ```python
-wd.read_csv(
-    filename: str | Path,
+wd.read(
+    path: str | Path | bytes | bytearray | memoryview | BinaryIO,
+    channel: int | list[int] | None = None,
+    start: float | None = None,
+    end: float | None = None,
+    ch_labels: list[str] | None = None,
     time_column: int | str = 0,
-    labels: list[str] | None = None,
     delimiter: str = ",",
-    header: int = 0
+    header: int | None = 0,
+    file_type: str | None = None,
+    source_name: str | None = None,
+    timeout: float = 10.0,
 ) -> ChannelFrame
 ```
 
-- `time_column`: 時間軸の列（インデックスまたは列名）
-- サンプリングレートは時間列から自動計算される
+- WAV、CSV、SoundFile 対応音声、HTTP(S)、bytes、binary file-like を受け付ける。
+- `channel` は読み込むチャンネル番号、`start` / `end` は秒。
+- `file_type` は拡張子推論を上書きする。匿名 bytes は互換既定で WAV として扱う。
+- URL/音声は sample decode を遅延する。CSV は shape と sampling rate のため同期 metadata pass を行い、計算時に再度 parse する。
+- WDF は明示的に拒否されるため `wd.load()` を使う。
+- `normalize` 引数はない。
 
-## wd.from_numpy
+```python
+wd.supported_formats() -> list[str]
+```
+
+## Construction and datasets
 
 ```python
 wd.from_numpy(
     data: NDArrayReal,
     sampling_rate: float,
     label: str | None = None,
-    metadata: FrameMetadata | dict | None = None,
+    metadata: dict | None = None,
     ch_labels: list[str] | None = None,
-    ch_units: list[str] | str | None = None
+    ch_units: list[str] | str | None = None,
 ) -> ChannelFrame
 ```
 
-- `data`: shape `(channels, samples)` または 1-D（自動変換）。3-D 以上はエラー
-- `ch_units`: `["Pa"]` で音圧参照値 2e-5 Pa が自動設定される。`ch_refs` パラメータは存在しない
-
-## wd.generate_sin
+- 1-D は `(1, samples)` へ変換する。2-D は `(channels, samples)`。
+- 3-D 以上は `ValueError`。
+- `ch_units="Pa"` の既定参照値は 20 µPa。未指定は unit `""`、ref `1.0`。
 
 ```python
 wd.generate_sin(
-    freqs: float | list[float] = 1000,
-    sampling_rate: float = 16000,
+    freqs: int | float | list[int | float] = 1000.0,
+    sampling_rate: int = 16000,
     duration: float = 1.0,
-    label: str | None = None
+    label: str | None = None,
 ) -> ChannelFrame
 ```
 
-- `freqs`: スカラーなら単チャンネル。リストなら各周波数が1チャンネル
-
-## wd.from_folder
+- Python/NumPy の整数・浮動小数を受け付ける。
+- 空リスト、非有限、0 以下は `ValueError`。非数値や bool は `TypeError`。
 
 ```python
 wd.from_folder(
-    folder_path: str | Path,
-    sampling_rate: float | None = None,
+    folder_path: str,
+    sampling_rate: int | None = None,
     file_extensions: list[str] | None = None,
     recursive: bool = False,
-    lazy_loading: bool = True
+    lazy_loading: bool = True,
+    metadata_resolver: Callable[[Path], Mapping[str, object]] | None = None,
+    path_metadata: bool = False,
 ) -> ChannelFrameDataset
 ```
 
-## 物理単位と参照値
+Dataset の主要操作:
 
-| `ch_units` 値 | 物理量 | 自動設定される参照値 | dB 式 |
-|--------------|--------|-------------------|-------|
-| `"Pa"` | 音圧 | 2e-5 Pa (20 μPa) | 20·log₁₀(p/2e-5) = dB SPL |
-| `"m/s²"` | 加速度 | 1e-6 m/s² | 20·log₁₀(a/1e-6) = dB (振動) |
-| `"V"` | 電圧 | 1 V | 20·log₁₀(V/1) |
-| その他 / None | — | 1.0（デフォルト）| — |
+| API | 効果 |
+|---|---|
+| `.select(**criteria)` | resolver/path metadata の exact match。Frame は読まない |
+| `.apply(func)` | 各 Frame へ任意の変換を適用し、新しい Dataset を返す |
+| `.resample(target_sr)` | 全 Frame の遅延 resampling |
+| `.trim(start, end)` | 全 Frame の遅延 trim |
+| `.normalize(**kwargs)` | 全 Frame の遅延 normalize |
+| `.stft(...)` | `SpectrogramFrameDataset` を返す |
 
-## フレーム型遷移図
+`metadata_resolver` と `path_metadata=True` は併用しない。
+`with_calibration()`、`astype()`、`cache()` は Frame API。校正は `.apply(...)` で Dataset 全体へ写像できるが、cache は選択・変換後に取り出した個々の Frame へ適用する。
 
-```
-ChannelFrame（時間域）
-    │
-    ├─ .fft(n_fft) ──────────────────────→ SpectralFrame（周波数域）
-    │                                            └─ .ifft() → ChannelFrame
-    │
-    ├─ .welch(n_fft) ────────────────────→ SpectralFrame（平均 PSD）
-    │
-    ├─ .stft(n_fft, hop_length) ─────────→ SpectrogramFrame（時間-周波数域）
-    │                                            ├─ .istft() → ChannelFrame
-    │                                            └─ .get_frame_at(t) → SpectralFrame
-    │
-    ├─ .noct_spectrum(fmin, fmax, n) ────→ NOctFrame（オクターブ帯域）
-    │
-    ├─ .coherence(n_fft) ────────────────→ SpectralFrame（コヒーレンス）
-    ├─ .csd(n_fft) ──────────────────────→ SpectralFrame（クロスパワースペクトル）
-    ├─ .transfer_function(n_fft) ────────→ SpectralFrame（伝達関数）
-    │
-    └─ .roughness_dw_spec() ─────────────→ RoughnessFrame（Bark×時間）
-```
-
-## インスタンスメソッド（クラスメソッド）
+## Frame materialization and reuse
 
 ```python
-# 最も汎用的なリーダー
-ChannelFrame.from_file(
-    path,
-    channel=None,
-    start=None,
-    end=None,
-    ch_labels=None,
-    file_type=None,       # None で自動判定
-    normalize=False
-) -> ChannelFrame
-
-# WAV として保存
-frame.to_wav(path, format=None)
-
-# HDF5 として保存
-frame.save(path, format="hdf5", compress="gzip", overwrite=False)
-
-# HDF5 から読み込み
-ChannelFrame.load(path, format="hdf5")
+frame.data -> ndarray
+frame.cache() -> SameConcreteFrame
+frame.astype(dtype) -> SameConcreteFrame
+frame.to_tensor(framework="torch", device=None) -> Any
 ```
+
+- `.data` は校正済み値を materialize する。単チャンネルは singleton channel 軸を省く。
+- `.cache()` は raw Dask tensor 全体を同期計算し、同じ具象型の新しい Frame を返す。lineage/Recipe node は増やさない。
+- `.astype()` は raw tensor を遅延変換し、lineage/Recipe node を追加する。
+- real/integer Frame は `float32` / `float64`、complex Frame は `complex64` / `complex128` だけを出力 dtype として受け付ける。
+- `to_tensor()` は `wandas[ml]` が必要で、遅延値を materialize する。
+
+## Calibration and measurement levels
+
+```python
+wd.ChannelCalibration(
+    factor: float = 1.0,
+    unit: str = "",
+    ref: float = inferred,
+)
+```
+
+`factor` は raw sample から物理量への倍率。`unit="Pa"` では `ref=2e-5` を推論する。
+
+```python
+frame.with_calibration(
+    values: Sequence[float | ChannelCalibration]
+          | Mapping[str | int, float | ChannelCalibration]
+          | NDArrayReal
+) -> ChannelFrame
+```
+
+- 数値は factor だけを置換する。
+- `ChannelCalibration` は factor、unit、ref をまとめて置換する。
+- raw sample は変えず、校正乗算は遅延する。
+
+```python
+reference = frame.channels[index].level_reference
+
+reference.reference_value: float
+reference.reference_unit: str
+reference.unit: str       # "dBFS", "dB SPL", or "dB"
+reference.label: str      # canonical display label
+reference.to_level(amplitude) -> float | ndarray
+```
+
+`to_level()` は `20 * log10(abs(amplitude) / reference)` を使い、ratio floor は `1e-12`。0 は `-240 dB`。入力はすでに linear physical domain にある値であり、calibration factor を再適用しない。
+
+## Persistence and compatibility APIs
+
+```python
+frame.save(path, *, compress="gzip", overwrite=False) -> None
+wd.load(path) -> BaseFrame
+frame.to_wav(path, format=None) -> None
+```
+
+- WDF 0.4 は built-in Frame の具象型、軸、校正、metadata、表示履歴を保存する。`wandas[io]` が必要。
+- `wd.read_wav(filename, labels=None)` と `wd.read_csv(...)` は互換用。`read_wav()` に `normalize` はない。
+- `wd.from_ndarray(...)` は deprecated。新規コードでは `wd.from_numpy()` を使う。
