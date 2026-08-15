@@ -10,6 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 import re
 
+import numpy as np
 import pytest
 
 
@@ -61,3 +62,21 @@ def test_wandas_indexing_skill_snippet_compiles(path: Path, block_index: int, co
 def test_wandas_indexing_skill_snippet_executes(path: Path, block_index: int, code: str):
     namespace: dict[str, object] = {"__name__": "__wandas_indexing_snippet__"}
     exec(compile(code, f"{path}#python-block-{block_index}", "exec"), namespace)
+
+
+def test_selection_operation_names_are_distinct():
+    if not _real_wandas_available():
+        pytest.skip("real wandas package/submodule is not available in this environment")
+    import wandas as wd
+
+    frame = wd.from_numpy(
+        np.ones((2, 100)),
+        sampling_rate=100,
+        ch_labels=["left", "right"],
+    )
+
+    by_query = frame.get_channel(query="left")
+    by_index = frame[0]
+
+    assert by_query.operation_history[-1]["operation"] == "wandas.frame.get_channel"
+    assert by_index.operation_history[-1]["operation"] == "wandas.frame.index"

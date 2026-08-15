@@ -12,7 +12,7 @@
 - callable query は `ChannelMetadata` を受け取り truthy な channel を選ぶ。
 - dict query は `ChannelMetadata` の field または channel `extra` key に対する equality / regex 条件。
 - match なしは `KeyError`。
-- selection は immutable な新しい Frame を返し、`wandas.frame.index` として lineage と `operation_history` に記録する。
+- selection は immutable な新しい Frame を返し、`get_channel()` は `wandas.frame.get_channel`、bracket indexing は `wandas.frame.index` として lineage と `operation_history` に記録する。
 
 ## `BaseFrame.__getitem__(key)`
 
@@ -53,6 +53,6 @@ Errors:
 
 ## Spectral frequency range
 
-- 表示範囲だけを絞る: `spectrogram.plot(fmin=20, fmax=8_000)`。
+- 表示範囲だけを絞る: `spectrogram.plot(fmin=20, fmax=8_000)`。`SpectralFrame` の line plot は `spectrum.plot(xlim=(20, 8_000))`。
 - 数値だけを抽出する: `mask = (spectrum.freqs >= 20) & (spectrum.freqs <= 8_000)` の後、`spectrum.magnitude[..., mask]`。
 - 部分frequency gridを持つ `SpectralFrame` / `SpectrogramFrame` は作らない。
