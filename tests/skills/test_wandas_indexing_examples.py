@@ -65,7 +65,10 @@ def test_wandas_indexing_skill_snippet_executes(path: Path, block_index: int, co
 
 
 def test_selection_operation_names_are_distinct():
-    wd = pytest.importorskip("wandas")
+    if not _real_wandas_available():
+        pytest.skip("real wandas package/submodule is not available in this environment")
+    import wandas as wd
+
     frame = wd.from_numpy(
         np.ones((2, 100)),
         sampling_rate=100,
