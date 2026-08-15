@@ -59,4 +59,4 @@ assert time_window.n_frames == 6
 assert np.allclose(time_window.source_time_offset, 2 * 128 / 16_000)
 ```
 
-Wandas 0.7.2 の `SpectralFrame` / `SpectrogramFrame` は complete canonical frequency grid を必要とする。周波数表示の絞り込みは `.plot(fmin=..., fmax=...)` を使い、frequency-bin 部分 slice で新しい Frame を作らない。
+Wandas 0.7.2 の `SpectralFrame` / `SpectrogramFrame` は complete canonical frequency grid を必要とする。周波数表示の絞り込みは `SpectralFrame.plot(xlim=(20, 8_000))` または `SpectrogramFrame.plot(fmin=20, fmax=8_000)` を使い、frequency-bin 部分 slice で新しい Frame を作らない。

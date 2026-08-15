@@ -172,7 +172,7 @@ assert channel_0.freqs.shape == spec.freqs.shape
 assert hasattr(time_window, "times")
 ```
 
-`SpectralFrame` / `SpectrogramFrame` は `n_fft // 2 + 1` 個の canonical one-sided frequency grid を保持するため、`spec[:, :20, :]` のような frequency-bin 部分 slice は拒否される。表示範囲は `.plot(fmin=..., fmax=...)`、数値抽出だけなら `.freqs` / `.magnitude` への mask を使う。
+`SpectralFrame` / `SpectrogramFrame` は `n_fft // 2 + 1` 個の canonical one-sided frequency grid を保持するため、`spec[:, :20, :]` のような frequency-bin 部分 slice は拒否される。表示範囲は `SpectralFrame.plot(xlim=(20, 8_000))` または `SpectrogramFrame.plot(fmin=20, fmax=8_000)`、数値抽出だけなら `.freqs` / `.magnitude` への mask を使う。
 
 ## Common Mistakes
 
@@ -185,10 +185,11 @@ assert hasattr(time_window, "times")
 | boolean mask の長さが channel 数と違う | `len(mask) == frame.n_channels` にする |
 | `frame["mic"]` が部分一致すると期待する | label selection は完全一致。部分一致・正規表現は `get_channel(query=re.compile(...))` を使う |
 | metadata query を `frame[...]` に渡す | dict/callable query は `frame.get_channel(query=...)` を使う |
-| `spec[:, :20, :]` で周波数範囲を持つ Frame を作る | canonical frequency grid は部分 slice できない。plot範囲は `fmin/fmax`、数値抽出は property の mask |
+| `spec[:, :20, :]` で周波数範囲を持つ Frame を作る | canonical frequency grid は部分 slice できない。SpectralFrame は `xlim`、SpectrogramFrame は `fmin/fmax`、数値抽出は property の mask |
 | `frame[0, 100:200]` 後の `time` が元信号の絶対時刻を保つと期待する | local `time` は0から始まり、元位置は `source_time_offset` に自動記録される |
 | 単一 channel 選択後の `.data` が常に2Dだと仮定する | 通常 frame の `.data` は単一 channel で channel axis が squeeze される。shape は必要に応じて確認する |
 | selection が履歴に残らないと考える | v0.7.2 の selection/slicing は `wandas.frame.index` として lineage と `operation_history` に記録される |
+| `get_channel()` と bracket selection の履歴名を同一視する | `get_channel()` は `wandas.frame.get_channel`、`frame[...]` は `wandas.frame.index` として記録される |
 
 ## Documentation Map
 
