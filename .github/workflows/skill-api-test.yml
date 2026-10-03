@@ -2,12 +2,16 @@ name: Skill API Tests
 
 on:
   push:
+    branches:
+      - main
     paths:
+      - ".github/workflows/skill-api-test.yml"
       - ".claude/skills/**"
       - "tests/skills/**"
       - "wandas/**"
   pull_request:
     paths:
+      - ".github/workflows/skill-api-test.yml"
       - ".claude/skills/**"
       - "tests/skills/**"
       - "wandas/**"
